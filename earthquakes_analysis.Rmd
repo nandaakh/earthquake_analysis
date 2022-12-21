@@ -1,0 +1,279 @@
+---
+title: "Analisa Gempa Indonesia 2008 - 2022"
+author: "Nanda Akhirdianto"
+date: "12/12/2022"
+output: html_document
+---
+
+### Latar Belakang
+Sudah bukan lagi menjadi rahasia umum bahwa Indonesia berada pada rangkaian **ring of fire**. **Ring of fire** atau yang biasa disebut, Circum-Pacific Belt, adalah rangkaian gunung berapi aktif sepanjang 40.000 km yang membentang di samudera pasifik. Berdasarkan fakta tersebut, bukan hanya Indonesia memiliki jumlah gunung api aktif, tetapi juga menunjukkan bahwa Indonesia menjadi salah satu negara yang rawan terjadi gempa bumi.
+
+Melalui analisa ini saya ingin melihat pola dan kecenderungan peristiwa gempa bumi yang terjadi di Indonesia sepanjang tahun, dari 2008 hingga Oktober 2022. Data saya dapatkan dari situs Kaggle, yang di _scraped_ dan di atur oleh BMKG (Badan Meteorologi, Klimatologi dan Geofisika) [link](https://www.kaggle.com/datasets/kekavigi/earthquakes-in-indonesia).
+
+Saya menggunakan R dan RStudio dalam proses analisa ini karena melihat data yang cukup besar, dan memikirkan efisiensi untuk mendapatkan hasil yang cepat.
+
+##### Memuat Libraries
+```{r}
+library(tidyverse)
+library(dplyr)
+library(lubridate)
+library(ggpubr)
+library(leaflet)
+```
+Mengimpor dataset
+```{r}
+df <- read_csv("katalog_gempa.csv")
+
+head(df)
+str(df)
+```
+Memahami isi dataset dan melihat jika ada _missing value_
+```{r}
+summary(df)
+lapply(df, class)
+sum(complete.cases(df)) # checking on missing values
+sum(complete.cases(df))/nrow(df)
+```
+##### Membersihkan dan memanipulasi data
+
+Merubah beberapa nama kolom
+```{r}
+df2 <- df %>%
+  rename(
+    dates = tgl,
+    times = ot,
+    loc = remark
+  )
+
+```
+
+Menambahkan kolom 'months' dan 'years' kedalam dataset
+```{r}
+df3 <- df2 %>%
+  mutate(
+    years = year(dates),
+    months= case_when(
+                                              month(df2$dates)==01 ~ "January",
+                                              month(df2$dates)==02 ~ "February",
+                                              month(df2$dates)==03 ~ "March",
+                                              month(df2$dates)==04 ~ "April",
+                                              month(df2$dates)==05 ~ "May",
+                                              month(df2$dates)==06 ~ "June",
+                                              month(df2$dates)==07 ~ "July",
+                                              month(df2$dates)==08 ~ "August",
+                                              month(df2$dates)==09 ~ "September",
+                                              month(df2$dates)==10 ~ "October",
+                                              month(df2$dates)==11 ~ "November",
+                                              month(df2$dates)==12 ~ "December"
+                                            ))
+colnames(df3)
+```
+
+Menghapus kolom yang tidak digunakan, serta melihat apakah masih ada data yang kurang lengkap
+```{r}
+df4 <- select(df3, -c(strike1, dip1, rake1, strike2, dip2, rake2))
+sum(is.na(df4)) # checking if still there are missing datas
+summary(is.na(df4))
+```
+
+Melihat jika ada data duplikat
+```{r}
+quakes_df <- df4 %>%
+  distinct()
+```
+
+##### Analisa data
+
+Plotting magnitudo dari sejumlah gempa bumi yang terjadi sepanjang tahun dari 2008 hingga 2022 (Oktober)
+```{r}
+qplot(mag, data = quakes_df, bins = 100)
+```
+
+Mencoba melihat gempa bumi yang terjadi sejak 2008, dan terapkan dalam diagram batang berikut
+```{r}
+year_df <- quakes_df %>%
+  select(years) %>%
+  group_by(years) %>%
+  count() %>%
+  arrange()
+head(year_df)
+
+# apply into bar chart
+ggplot(data = quakes_df) +
+  geom_bar(mapping = aes(x=years))+
+  labs(title = "Earthquakes Incident Since 2008")
+```
+
+Apakah gempa terjadi berdasarkan bulan tertentu? skrip di bawah ini menunjukkan hasil selama bertahun-tahun sejak 2008
+```{r}
+month_df <- quakes_df %>%
+  select(months) %>%
+  group_by(months) %>%
+  count() %>%
+  arrange()
+head(month_df)
+
+# apply into bar chart
+ggplot(data = quakes_df) +
+  geom_bar(mapping = aes(x=months, fill=months)) +
+  labs(title = "Earthquakes Incident by Month Since 2008")
+```
+
+Tentukan analisis per musim untuk melihat pola pada setiap musim pad masing-masing tahun
+```{r}
+seasEq <- quakes_df %>%
+  mutate(
+    seasons = case_when(
+      month(quakes_df$dates) == 10|
+        month(quakes_df$dates) == 11|
+        month(quakes_df$dates) == 12|
+        month(quakes_df$dates) == 01|
+        month(quakes_df$dates) == 02|
+        month(quakes_df$dates) == 03 ~ "rainy season",
+      month(quakes_df$dates) == 04|
+        month(quakes_df$dates) == 05|
+        month(quakes_df$dates) == 06|
+        month(quakes_df$dates) == 07|
+        month(quakes_df$dates) == 08|
+        month(quakes_df$dates) == 09 ~ "dry season"
+      
+    )
+  ) 
+
+# show the scraped data
+season_df <- seasEq %>%
+  select(seasons) %>%
+  group_by(seasons) %>%
+  count() %>%
+  arrange()
+head(season_df)
+
+# apply it into bar chart
+ggplot(data = seasEq) +
+  geom_bar(mapping = aes(x=seasons, fill=seasons)) +
+  facet_wrap(~years) +
+  labs(title = "Earthquakes Incident by Seasons")
+```
+
+Mencari pola jika kita mengkategorikan tingkat magnitudo ke dalam dataframe. Buat kolom baru bernama 'mag_category' yang membagi nilai di kolom 'mag' menjadi bagian dan menetapkan setiap nilai ke kategori yang sesuai (minor = 0-3,9 SR), ( sedang = 4-5 SR), (mayor = 5.1-7.9 SR), kemudian identifikasi pola yang ditunjukkan pada masing-masing tahun.
+```{r}
+magEq <- quakes_df %>%
+  mutate(mag_category = cut(
+    mag,
+    breaks = c(0, 3.9, 4.9, 5, 7.9),
+    labels = c("minor", "moderate", "strong", "major")
+  ))
+head(magEq)
+
+# plotting the finding (shown visual from data since 2008)
+ggplot(magEq, aes(x = mag_category, fill = mag_category)) +
+  geom_bar() +
+  labs(title = "Number of earthquakes by magnitude category",
+       x = "Magnitude Category",
+       y = "Number of earthquakes") +
+  facet_wrap(~years)
+```
+
+Mari kita coba filter data dengan magnitudo lebih dari 5 skala Richter yang menandakan bahwa gempa dengan kekuatan tersebut menimbulkan kerusakan dari ringan hingga parah, bahkan menimbulkan korban jiwa. Pertama, lihat apakah yang akan kita temukan jika menggunakan fungsi leaflet.
+```{r}
+mag_maj <- magEq %>%
+  filter(mag_category == "major")
+leaflet() %>%
+  addTiles() %>%
+  addCircles(data = mag_maj,
+             radius = mag_maj$mag,
+             color = "red",
+             fillOpacity = 0.1,
+             weight = 1)
+```
+
+Mengidentifikasi jenis gempa bumi berdasarkan kedalaman (ditampilkan data tahun 2008). Buat kolom baru bernama 'eq_type' yang membagi nilai di kolom 'kedalaman' ke dalam kotak dan menetapkan setiap nilai ke kategori yang sesuai (dangkal = 0-60 km), (menengah = 61-300 km), (dalam = > 300 km). Kemudian visualisasikan temuan tiap-tiap tahun.
+```{r}
+depEq <- quakes_df %>%
+  mutate(eq_type = cut(
+    depth,
+    breaks = c(0, 61, 300, 750),
+    labels = c("shallow", "medium", "deep")
+  ))
+head(depEq)
+
+# visualize the finding
+ggplot(depEq, aes(x = eq_type, fill = eq_type)) +
+  geom_bar() +
+  labs(title = "Number of earthquakes by Depth",
+       x = "Earthquake Type",
+       y = "Number of earthquakes") +
+  facet_wrap(~years)
+```
+
+Mari kita lihat jika kita memetakan temuan menggunakan fungsi leaflet. Menentukan tipe kedalam 'shallow', karena berdasarkan riset gempa dengan kedalam dangkal paling merusak, menimbulkan bencana lain bahkan memakan korban jiwa.
+```{r}
+depShl <- depEq %>%
+  filter(eq_type == "shallow")
+leaflet() %>%
+  addTiles() %>%
+  addCircles(data = depShl,
+             radius = depShl$depth,
+             color = "red",
+             fillOpacity = 0.1,
+             weight = 1)
+```
+
+Meluangkan waktu sejenak untuk mengetahui korelasi apa antara kedalaman dan besarnya dan untuk memeriksa pengaruh antara kedua variabel ini, fungsi 'stat_cor()' digunakan untuk menghitung koefisien korelasi dan menambahkannya sebagai label teks ke plot.
+```{r}
+ggplot(quakes_df, aes(x = depth, y = mag)) +
+  geom_point() +
+  stat_cor()
+```
+
+Mengelompokkan data berdasarkan 'lat' dan 'long' dan rangkum jumlah gempa bumi di setiap lokasi.
+```{r}
+quake_locations <- quakes_df %>%
+  group_by(lat, lon) %>%
+  summarize(n = n())
+
+head(quake_locations)
+```
+
+```{r}
+# Plot the data using a scatter plot
+ggplot(quakes_df, aes(x = lat, y = lon)) +
+  geom_point() +
+  labs(title = "Number of earthquakes by location",
+       x = "Latitude",
+       y = "Longitude",
+       size = "Number of earthquakes") +
+  facet_wrap(~years)
+```
+
+```{r}
+# Create a map of the region
+map_df <- filter(quakes_df, dates >= as.Date("2017-01-01") & dates <= as.Date("2022-10-31"))
+leaflet() %>%
+  addTiles() %>%
+  addCircles(data = map_df,
+             radius = map_df$mag,
+             color = "blue",
+             fillOpacity = 0.1,
+             weight = 1)
+```
+
+##### Temuan-temuan Penting
+
+Setelah melakukan serangkaian proses analisa, ditemukan beberapa temuan-temuan yang dapat digunakan sebagai rencana mitigasi oleh pemangku kepentingan.
+
+* Kasus atau bencana gempa bumi, baik gempa kecil maupun besar terjadi pada tahun 2018, diikuti tahun 2019 dan tahun 2021.
+
+* Data juga menunjukkan sepanjang tahun 2008 hingga 2022, pada musim penghujan sering terjadi gempa bumi.
+
+* Sepanjang tahun 2008 hingga 2022, di Indonesia sering terjadi gempa minor atau gempa bermagnitudo anatara 0-3.9 SR, diikuti gempa sedang.
+
+* Banyak benacan gema bumi yang terjadi, baik gemap kecil maupun besar, dikategorikan sebagai gempa dangkal karena data mencatat kedalaman titik gempa tersebut berada dikedalaman antara 0-60 KM.
+
+* Data mencatat serta dikuatkan dengan hasil analisa menunjukkan bahwa lokasi yang sering terjadi gempa terjadi disepanjang pesisir barat Pulau Sumatera, sepanjang sisi selatan Pulau Jawa, Bali, Nusa Tenggara, wilayah Sulawesi dan kepulauan Maluku, serta sebagian Pulau Papua. Hal ini juga diimbangi dengan fakta bahwa daerah/kawasan-kawasan tersebut merupakan pertemuan 3 lempeng tektonik, yakni **Lempeng Indo-Australia**, **Lempeng Eurasia** dan **Lempeng Pasifik**.
+
+##### Kesimpulan
+
+1. Dengan melihat fenomena yang terjadi dapat disimpulkan bahwa sangat tidak mungkin bagi Indonesia untuk bebas dari bencana gempa bumi. Karena kondisi secara geografis, Indonesia berada pertmuan 3 lempeng tektonik yang mana setiap waktu terdapat aktivitas meskipun sekian milimeter. Hal yang bisa dilakukan adalah BMKG selaku pemangku kepentingan yang memantau adanya bencana, mensosialisasikan kepada masyarakat terutama yang tinggal dilokasi rawan gempa, berupa upaya penyelamatan jika terjadi bencana. Peringatan dini jika terjadi aktivitas dasar bumi yang bisa diakses masyarakat setiap waktu sebagai langkah preventif.
+
+2. Selain itu, sebagai langkah preventif selanjutnya, pemerintah melalui sub-organisasi yang mengurusi tentang pembangunan bangunan, mensosialisasikan kepada masayarkat untuk mempertimbangkan menggunakan bangunan tahan gempa, terutama masyarakat yang tinggal dilokasi rawan gempa, seperti yang telah saya sebutkan diatas.
