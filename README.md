@@ -1,2 +1,4 @@
 # earthquake_analysis
-This is a my personal project, where I did an exploratory analysis of earthquakes in Indonesia from 2008 to 2022.
+This is my personal project, where I did an exploratory analysis of earthquakes in Indonesia from 2008 to 2022. Data was acquired from Kaggle and the whole process used R in R Studio to work on this project. My role in this project as a Full-Stack Data Analyst, from scraping data, cleaning, manipulating, analyzing, and then visualizing using ggplot2 and leaflet packages in R. Tableau is used when creating a dashboard for presentation.
+The goal of this project is to identify earthquakes that happened throughout the years since 2008, by analyzing the category, magnitude, and also how deep the earthquakes were. Also, getting insight into the exact location where the earthquake occurred across Indonesia, which really important to give awareness and preventive action for those people who lived in vulnerable locations.
+
